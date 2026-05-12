@@ -37,6 +37,26 @@ def parse_kcal(val):
         return None
 
 
+# ── 방문자 카운터 ─────────────────────────────────────────────────────────────
+
+_COUNTER_NS = "yardbus-rogermostwanted"
+
+
+def _hit_counter(key: str) -> int:
+    try:
+        r = requests.get(f"https://api.counterapi.dev/v1/{_COUNTER_NS}/{key}/up", timeout=3)
+        return r.json().get("count", -1) if r.ok else -1
+    except Exception:
+        return -1
+
+
+def fetch_visitor_counts() -> tuple:
+    today_key = "today-" + datetime.now(tz=KST).strftime("%Y-%m-%d")
+    today = _hit_counter(today_key)
+    total = _hit_counter("total")
+    return today, total
+
+
 # ── API ──────────────────────────────────────────────────────────────────────
 
 def do_login():
@@ -388,3 +408,15 @@ else:
                 if kcal:
                     st.caption(f"🔥 {kcal} kcal")
                 st.markdown("<hr style='margin:8px 0'>", unsafe_allow_html=True)
+
+# ── 방문자 카운터 ─────────────────────────────────────────────────────────────
+
+visitor_today, visitor_total = fetch_visitor_counts()
+today_disp = str(visitor_today) if visitor_today >= 0 else "--"
+total_disp = str(visitor_total) if visitor_total >= 0 else "--"
+st.markdown(
+    f"<div style='text-align:center;color:#aaa;font-size:12px;margin-top:24px;'>"
+    f"📧 rogermostwanted@gmail.com &nbsp;|&nbsp; Today {today_disp} &nbsp;Total {total_disp}"
+    f"</div>",
+    unsafe_allow_html=True,
+)
