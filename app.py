@@ -4,7 +4,6 @@ import uuid
 import html as html_lib
 from datetime import datetime, timedelta
 import pytz
-import streamlit.components.v1 as components
 
 BASE_URL = "https://welplus.welstory.com"
 RESTAURANT_ID = "REST000076"
@@ -227,11 +226,16 @@ def render_course(course, date_str, meal_id, token):
 
 st.set_page_config(page_title="삼성중공업 식단", page_icon="🍱", layout="centered")
 
-# ── 전체 CSS ─────────────────────────────────────────────────────────────────
+# ── CSS ──────────────────────────────────────────────────────────────────────
 
 st.markdown("""
 <style>
-/* 날짜 네비게이션 한 줄 강제 */
+/* Streamlit 상단 헤더(Deploy 바) 높이만큼 여백 */
+.block-container {
+    padding-top: 3.5rem !important;
+}
+
+/* 날짜 네비 한 줄 강제 */
 [data-testid="stHorizontalBlock"] {
     flex-wrap: nowrap !important;
     gap: 4px !important;
@@ -240,7 +244,6 @@ st.markdown("""
 [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
     min-width: 0 !important;
     flex-shrink: 1 !important;
-    overflow: hidden;
 }
 @media (max-width: 640px) {
     [data-testid="stHorizontalBlock"] button {
@@ -273,20 +276,10 @@ div[data-testid="stRadio"] > div > label:has(input:checked) {
     color: #1a73e8;
     font-weight: 700;
 }
-div[data-testid="stRadio"] > div > label > div:first-child {
-    display: none;
-}
+div[data-testid="stRadio"] > div > label > div:first-child { display: none; }
 div[data-testid="stRadio"] > div > label p { margin: 0; }
-
-/* 스티키 헤더 내부 여백 최소화 */
-#sticky-nav-block { padding-top: 4px !important; padding-bottom: 2px !important; }
-#sticky-nav-block hr { margin: 4px 0 !important; }
 </style>
 """, unsafe_allow_html=True)
-
-# ── 타이틀 (스크롤 가능) ──────────────────────────────────────────────────────
-
-st.title("🍱 삼성중공업 식단")
 
 # ── 로그인 ───────────────────────────────────────────────────────────────────
 
@@ -298,73 +291,67 @@ if "token" not in st.session_state:
             st.error(f"로그인 실패: {e}")
             st.stop()
 
-# ── 스티키 날짜/탭 네비게이션 ────────────────────────────────────────────────
+# ── 날짜 네비게이션 ──────────────────────────────────────────────────────────
 
-with st.container():
-    # 날짜 네비게이션
-    if "sel_date" not in st.session_state:
-        st.session_state.sel_date = korea_today()
+if "sel_date" not in st.session_state:
+    st.session_state.sel_date = korea_today()
 
-    meal_labels = [label for _, label in MEAL_TIMES]
+meal_labels = [label for _, label in MEAL_TIMES]
+today = korea_today()
+sel = st.session_state.sel_date
+diff = (sel - today).days
 
-    today = korea_today()
-    sel = st.session_state.sel_date
-    diff = (sel - today).days
-    if diff == 0:
-        badge = " <span style='font-size:12px;color:#1a73e8;font-weight:700;'>(오늘)</span>"
-    elif diff == 1:
-        badge = " <span style='font-size:12px;color:#34a853;font-weight:700;'>(내일)</span>"
-    elif diff == -1:
-        badge = " <span style='font-size:12px;color:#9aa0a6;font-weight:700;'>(어제)</span>"
-    else:
-        badge = ""
+if diff == 0:
+    badge = " <span style='font-size:12px;color:#1a73e8;font-weight:700;'>(오늘)</span>"
+elif diff == 1:
+    badge = " <span style='font-size:12px;color:#34a853;font-weight:700;'>(내일)</span>"
+elif diff == -1:
+    badge = " <span style='font-size:12px;color:#9aa0a6;font-weight:700;'>(어제)</span>"
+else:
+    badge = ""
 
-    col_today, col_prev, col_date, col_next = st.columns([1.5, 1, 4, 1])
-    with col_today:
-        if st.button("오늘", use_container_width=True, disabled=(diff == 0)):
-            st.session_state.sel_date = today
-            st.session_state.meal_radio = meal_labels[1]
-            st.rerun()
-    with col_prev:
-        if st.button("◀", use_container_width=True):
-            st.session_state.sel_date -= timedelta(days=1)
-            st.session_state.meal_radio = meal_labels[1]
-            st.rerun()
-    with col_date:
-        st.markdown(
-            f"<div style='text-align:center;font-size:15px;font-weight:600;"
-            f"padding:0 0 6px 0;white-space:nowrap;'>{date_label(sel)}{badge}</div>",
-            unsafe_allow_html=True,
-        )
-    with col_next:
-        if st.button("▶", use_container_width=True):
-            st.session_state.sel_date += timedelta(days=1)
-            st.session_state.meal_radio = meal_labels[1]
-            st.rerun()
-
-    date_str = date_to_str(sel)
-
-    st.divider()
-
-    # 아침/점심/저녁 탭
-    if "meal_radio" not in st.session_state:
+col_today, col_prev, col_date, col_next = st.columns([1.5, 1, 4, 1])
+with col_today:
+    if st.button("오늘", use_container_width=True, disabled=(diff == 0)):
+        st.session_state.sel_date = today
         st.session_state.meal_radio = meal_labels[1]
-
-    selected_label = st.radio(
-        "식사 시간",
-        options=meal_labels,
-        key="meal_radio",
-        horizontal=True,
-        label_visibility="collapsed",
+        st.rerun()
+with col_prev:
+    if st.button("◀", use_container_width=True):
+        st.session_state.sel_date -= timedelta(days=1)
+        st.session_state.meal_radio = meal_labels[1]
+        st.rerun()
+with col_date:
+    st.markdown(
+        f"<div style='text-align:center;font-size:15px;font-weight:600;"
+        f"white-space:nowrap;line-height:38px;'>{date_label(sel)}{badge}</div>",
+        unsafe_allow_html=True,
     )
-    meal_id = next(mid for mid, lbl in MEAL_TIMES if lbl == selected_label)
+with col_next:
+    if st.button("▶", use_container_width=True):
+        st.session_state.sel_date += timedelta(days=1)
+        st.session_state.meal_radio = meal_labels[1]
+        st.rerun()
 
-    # 스티키 헤더 끝 마커
-    st.markdown('<div id="header-end"></div>', unsafe_allow_html=True)
+date_str = date_to_str(sel)
+
+st.divider()
+
+# ── 아침/점심/저녁 탭 ────────────────────────────────────────────────────────
+
+if "meal_radio" not in st.session_state:
+    st.session_state.meal_radio = meal_labels[1]
+
+selected_label = st.radio(
+    "식사 시간",
+    options=meal_labels,
+    key="meal_radio",
+    horizontal=True,
+    label_visibility="collapsed",
+)
+meal_id = next(mid for mid, lbl in MEAL_TIMES if lbl == selected_label)
 
 # ── 메뉴 컨텐츠 ──────────────────────────────────────────────────────────────
-
-st.markdown("")
 
 token = st.session_state.token
 
@@ -396,71 +383,3 @@ else:
                 if kcal:
                     st.caption(f"🔥 {kcal} kcal")
                 st.markdown("<hr style='margin:8px 0'>", unsafe_allow_html=True)
-
-# ── 스티키 헤더 JS ────────────────────────────────────────────────────────────
-
-components.html("""
-<script>
-(function() {
-  var doc = window.parent.document;
-
-  function applySticky() {
-    var marker = doc.getElementById('header-end');
-    if (!marker) return false;
-
-    // 마커를 포함하는 가장 바깥쪽 stVerticalBlock 탐색
-    var blocks = Array.from(doc.querySelectorAll('[data-testid="stVerticalBlock"]'));
-    var outerBlock = null;
-    for (var i = 0; i < blocks.length; i++) {
-      if (blocks[i].contains(marker)) {
-        outerBlock = blocks[i];
-        break;
-      }
-    }
-    if (!outerBlock) return false;
-
-    // outerBlock의 직계 자식 중 마커를 포함하는 요소 (컨테이너 래퍼)
-    var target = marker;
-    while (target && target.parentElement !== outerBlock) {
-      target = target.parentElement;
-      if (!target || target === doc.body) return false;
-    }
-    if (!target) return false;
-
-    // 배경색 결정 (다크모드 대응)
-    var appEl = doc.querySelector('.stApp');
-    var bg = appEl ? getComputedStyle(appEl).backgroundColor : '';
-    if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
-      bg = getComputedStyle(doc.body).backgroundColor;
-    }
-    if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
-      bg = '#ffffff';
-    }
-
-    target.style.position = 'sticky';
-    target.style.top = '0';
-    target.style.zIndex = '999';
-    target.style.backgroundColor = bg;
-    target.style.paddingTop = '6px';
-    target.style.paddingBottom = '2px';
-    return true;
-  }
-
-  function tryApply(remaining) {
-    if (applySticky()) return;
-    if (remaining > 0) setTimeout(function() { tryApply(remaining - 1); }, 300);
-  }
-
-  tryApply(8);
-
-  // Streamlit 리렌더링 시 재적용
-  var debounce;
-  var mainEl = doc.querySelector('section[data-testid="stMain"]') || doc.body;
-  var observer = new MutationObserver(function() {
-    clearTimeout(debounce);
-    debounce = setTimeout(function() { applySticky(); }, 200);
-  });
-  observer.observe(mainEl, { childList: true, subtree: true, attributes: false, characterData: false });
-})();
-</script>
-""", height=0)
