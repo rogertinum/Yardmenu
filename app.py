@@ -177,22 +177,22 @@ def render_dish_table(label, main_name, dish_names):
     rows = ""
     if label:
         rows += (
-            f"<tr><td style='padding:10px 12px;border-bottom:1px solid #eee;"
-            f"font-weight:600;color:#333;'>"
+            f"<tr><td style='padding:10px 12px;border-bottom:1px solid var(--secondary-background-color);"
+            f"font-weight:600;color:var(--text-color);'>"
             f"&lt;{html_lib.escape(label)}&gt;{html_lib.escape(main_name)}</td></tr>"
         )
     for n in dish_names:
         rows += (
-            f"<tr><td style='padding:9px 12px;border-bottom:1px solid #eee;"
-            f"color:#555;'>{html_lib.escape(n)}</td></tr>"
+            f"<tr><td style='padding:9px 12px;border-bottom:1px solid var(--secondary-background-color);"
+            f"color:var(--text-color);opacity:0.8;'>{html_lib.escape(n)}</td></tr>"
         )
     st.markdown(
         f"""
         <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:6px;">
             <thead>
                 <tr>
-                    <th style="text-align:left;padding:8px 12px;border-bottom:2px solid #ddd;
-                               color:#888;font-size:12px;font-weight:600;letter-spacing:0.5px;">
+                    <th style="text-align:left;padding:8px 12px;border-bottom:2px solid var(--secondary-background-color);
+                               color:var(--text-color);opacity:0.5;font-size:12px;font-weight:600;letter-spacing:0.5px;">
                         항목
                     </th>
                 </tr>
@@ -224,8 +224,8 @@ def render_course(course, date_str, meal_id, token):
         except Exception:
             pass
 
-    kcal_str = f"&nbsp;&nbsp;<span style='color:#888;font-size:13px;'>{kcal} kcal</span>" if kcal else ""
-    header_label = f"<span style='background:#e8f4fd;color:#1a73e8;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;margin-right:8px;'>{html_lib.escape(label)}</span>" if label else ""
+    kcal_str = f"&nbsp;&nbsp;<span style='color:var(--text-color);opacity:0.5;font-size:13px;'>{kcal} kcal</span>" if kcal else ""
+    header_label = f"<span style='background:var(--wm-badge-bg);color:var(--wm-badge-color);font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;margin-right:8px;'>{html_lib.escape(label)}</span>" if label else ""
     header_name = f"<strong>{html_lib.escape(name)}</strong>"
 
     img_data = fetch_image(img_url, token) if img_url else None
@@ -239,7 +239,7 @@ def render_course(course, date_str, meal_id, token):
         st.image(img_data, use_container_width=True)
 
     render_dish_table(label, name, dish_names)
-    st.markdown("<hr style='margin:12px 0;border:none;border-top:1px solid #eee;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin:12px 0;border:none;border-top:1px solid var(--secondary-background-color);'>", unsafe_allow_html=True)
 
 
 # ── 페이지 설정 ──────────────────────────────────────────────────────────────
@@ -250,6 +250,18 @@ st.set_page_config(page_title="삼성중공업 식단", page_icon="🍱", layout
 
 st.markdown("""
 <style>
+/* 다크모드 커스텀 변수 */
+:root {
+    --wm-badge-bg: #e8f4fd;
+    --wm-badge-color: #1a73e8;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --wm-badge-bg: #0d2a4a;
+        --wm-badge-color: #5ba4f5;
+    }
+}
+
 /* Streamlit 상단 헤더(Deploy 바) 높이만큼 여백 */
 .block-container {
     padding-top: 3.5rem !important;
@@ -278,7 +290,7 @@ div[data-testid="stRadio"] > div {
     flex-wrap: nowrap;
     justify-content: center;
     gap: 0;
-    border-bottom: 2px solid #aaa;
+    border-bottom: 2px solid var(--secondary-background-color);
     margin-bottom: 0;
 }
 div[data-testid="stRadio"] > div > label {
@@ -296,9 +308,9 @@ div[data-testid="stRadio"] > div > label {
     white-space: nowrap;
 }
 div[data-testid="stRadio"] > div > label:has(input:checked) {
-    border-bottom: 3px solid #1a73e8;
+    border-bottom: 3px solid var(--primary-color);
     opacity: 1;
-    color: #1a73e8;
+    color: var(--primary-color);
     font-weight: 700;
 }
 div[data-testid="stRadio"] > div > label > div:first-child { display: none; }
@@ -415,7 +427,7 @@ visitor_today, visitor_total = fetch_visitor_counts()
 today_disp = str(visitor_today) if visitor_today >= 0 else "--"
 total_disp = str(visitor_total) if visitor_total >= 0 else "--"
 st.markdown(
-    f"<div style='text-align:center;color:#aaa;font-size:12px;margin-top:24px;'>"
+    f"<div style='text-align:center;color:var(--text-color);opacity:0.4;font-size:12px;margin-top:24px;'>"
     f"📧 rogermostwanted@gmail.com &nbsp;|&nbsp; Today {today_disp} &nbsp;Total {total_disp}"
     f"</div>",
     unsafe_allow_html=True,
