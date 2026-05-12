@@ -1,0 +1,466 @@
+import streamlit as st
+import requests
+import uuid
+import html as html_lib
+from datetime import datetime, timedelta
+import pytz
+import streamlit.components.v1 as components
+
+BASE_URL = "https://welplus.welstory.com"
+RESTAURANT_ID = "REST000076"
+DEVICE_ID = str(uuid.uuid4())
+KST = pytz.timezone("Asia/Seoul")
+
+MEAL_TIMES = [("1", "🌅 아침"), ("2", "☀️ 점심"), ("3", "🌙 저녁")]
+
+
+# ── 유틸 ─────────────────────────────────────────────────────────────────────
+
+def korea_today():
+    return datetime.now(KST).date()
+
+
+def date_to_str(d):
+    return d.strftime("%Y%m%d")
+
+
+def date_label(d):
+    days = ["월", "화", "수", "목", "금", "토", "일"]
+    return f"{d.month}월 {d.day}일 ({days[d.weekday()]})"
+
+
+def parse_kcal(val):
+    if not val:
+        return None
+    try:
+        return int(float(str(val).replace(",", "")))
+    except Exception:
+        return None
+
+
+# ── API ──────────────────────────────────────────────────────────────────────
+
+def do_login():
+    r = requests.post(
+        f"{BASE_URL}/login",
+        headers={
+            "User-Agent": "Welplus",
+            "X-Device-Id": DEVICE_ID,
+            "X-Autologin": "N",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        data={
+            "username": st.secrets["WELSTORY_USERNAME"],
+            "password": st.secrets["WELSTORY_PASSWORD"],
+            "remember-me": "false",
+        },
+        timeout=10,
+    )
+    r.raise_for_status()
+    return r.headers["Authorization"]
+
+
+def api_get(token, path, params=None):
+    r = requests.get(
+        f"{BASE_URL}{path}",
+        params=params,
+        headers={"User-Agent": "Welplus", "X-Device-Id": DEVICE_ID, "Authorization": token},
+        timeout=10,
+    )
+    r.raise_for_status()
+    if not r.text.strip():
+        raise ValueError("empty_body")
+    return r.json()
+
+
+def fetch_dishes(token, date_str, meal_id):
+    data = api_get(token, "/api/meal", {
+        "menuDt": date_str,
+        "menuMealType": meal_id,
+        "restaurantCode": RESTAURANT_ID,
+    })
+    return data.get("data", {}).get("mealList", [])
+
+
+def fetch_course_detail(token, date_str, meal_id, hall_no, course_type):
+    data = api_get(token, "/api/meal/detail/nutrient", {
+        "menuDt": date_str,
+        "hallNo": hall_no,
+        "menuCourseType": course_type,
+        "menuMealType": meal_id,
+        "restaurantCode": RESTAURANT_ID,
+    })
+    return data.get("data", []) or []
+
+
+def fetch_image(url, token):
+    try:
+        r = requests.get(
+            url,
+            headers={"User-Agent": "Welplus", "Authorization": token},
+            timeout=5,
+        )
+        if r.ok and r.content:
+            return r.content
+    except Exception:
+        pass
+    return None
+
+
+def get_dishes_with_relogin(token, date_str, meal_id):
+    try:
+        return fetch_dishes(token, date_str, meal_id), token
+    except ValueError:
+        new_token = do_login()
+        st.session_state.token = new_token
+        return fetch_dishes(new_token, date_str, meal_id), new_token
+
+
+# ── 메뉴 데이터 파싱 ──────────────────────────────────────────────────────────
+
+def group_into_courses(dishes):
+    groups = {}
+    for d in dishes:
+        key = f"{d['hallNo']}-{d['menuCourseType']}"
+        groups.setdefault(key, []).append(d)
+    return list(groups.values())
+
+
+def is_takeout(dishes):
+    first = dishes[0]
+    if first.get("salesType", "").startswith("T"):
+        return True
+    return any(
+        ("[" in d["menuName"] and "Coin" in d["menuName"]) or "도시락" in d["menuName"]
+        for d in dishes
+    )
+
+
+def main_dish_name(dishes):
+    main = next((d for d in dishes if d.get("typicalMenu") == "Y"), dishes[0])
+    return main["menuName"]
+
+
+def course_label(dishes):
+    return dishes[0].get("courseTxt", "")
+
+
+def course_image_url(dishes):
+    first = dishes[0]
+    cd = first.get("photoCd", "")
+    url = first.get("photoUrl", "")
+    return (url + cd) if cd and url else None
+
+
+# ── 렌더링 헬퍼 ──────────────────────────────────────────────────────────────
+
+def render_dish_table(label, main_name, dish_names):
+    rows = ""
+    if label:
+        rows += (
+            f"<tr><td style='padding:10px 12px;border-bottom:1px solid #eee;"
+            f"font-weight:600;color:#333;'>"
+            f"&lt;{html_lib.escape(label)}&gt;{html_lib.escape(main_name)}</td></tr>"
+        )
+    for n in dish_names:
+        rows += (
+            f"<tr><td style='padding:9px 12px;border-bottom:1px solid #eee;"
+            f"color:#555;'>{html_lib.escape(n)}</td></tr>"
+        )
+    st.markdown(
+        f"""
+        <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:6px;">
+            <thead>
+                <tr>
+                    <th style="text-align:left;padding:8px 12px;border-bottom:2px solid #ddd;
+                               color:#888;font-size:12px;font-weight:600;letter-spacing:0.5px;">
+                        항목
+                    </th>
+                </tr>
+            </thead>
+            <tbody>{rows}</tbody>
+        </table>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_course(course, date_str, meal_id, token):
+    name = main_dish_name(course)
+    label = course_label(course)
+    kcal = parse_kcal(course[0].get("sumKcal"))
+    img_url = course_image_url(course)
+    hall_no = course[0].get("hallNo", "")
+    course_type = course[0].get("menuCourseType", "")
+
+    dish_names = [d["menuName"] for d in course]
+    if hall_no and course_type:
+        try:
+            detail = fetch_course_detail(token, date_str, meal_id, hall_no, course_type)
+            if detail:
+                dish_names = [item["menuName"] for item in detail]
+                main_item = next((item for item in detail if item.get("typicalMenu") == "Y"), None)
+                if main_item:
+                    name = main_item["menuName"]
+        except Exception:
+            pass
+
+    kcal_str = f"&nbsp;&nbsp;<span style='color:#888;font-size:13px;'>{kcal} kcal</span>" if kcal else ""
+    header_label = f"<span style='background:#e8f4fd;color:#1a73e8;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;margin-right:8px;'>{html_lib.escape(label)}</span>" if label else ""
+    header_name = f"<strong>{html_lib.escape(name)}</strong>"
+
+    img_data = fetch_image(img_url, token) if img_url else None
+
+    st.markdown(
+        f"<div style='margin-bottom:4px;'>{header_label}{header_name}{kcal_str}</div>",
+        unsafe_allow_html=True,
+    )
+
+    if img_data:
+        st.image(img_data, use_container_width=True)
+
+    render_dish_table(label, name, dish_names)
+    st.markdown("<hr style='margin:12px 0;border:none;border-top:1px solid #eee;'>", unsafe_allow_html=True)
+
+
+# ── 페이지 설정 ──────────────────────────────────────────────────────────────
+
+st.set_page_config(page_title="삼성중공업 식단", page_icon="🍱", layout="centered")
+
+# ── 전체 CSS ─────────────────────────────────────────────────────────────────
+
+st.markdown("""
+<style>
+/* 날짜 네비게이션 한 줄 강제 */
+[data-testid="stHorizontalBlock"] {
+    flex-wrap: nowrap !important;
+    gap: 4px !important;
+    align-items: center !important;
+}
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+    min-width: 0 !important;
+    flex-shrink: 1 !important;
+    overflow: hidden;
+}
+@media (max-width: 640px) {
+    [data-testid="stHorizontalBlock"] button {
+        padding: 6px 4px !important;
+        font-size: 13px !important;
+    }
+}
+
+/* 탭 스타일 라디오 */
+div[data-testid="stRadio"] > div {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #aaa;
+    margin-bottom: 0;
+}
+div[data-testid="stRadio"] > div > label {
+    padding: 6px 22px;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    opacity: 0.5;
+    margin-bottom: -2px;
+    background: transparent;
+    transition: opacity 0.15s;
+}
+div[data-testid="stRadio"] > div > label:has(input:checked) {
+    border-bottom: 3px solid #1a73e8;
+    opacity: 1;
+    color: #1a73e8;
+    font-weight: 700;
+}
+div[data-testid="stRadio"] > div > label > div:first-child {
+    display: none;
+}
+div[data-testid="stRadio"] > div > label p { margin: 0; }
+
+/* 스티키 헤더 내부 여백 최소화 */
+#sticky-nav-block { padding-top: 4px !important; padding-bottom: 2px !important; }
+#sticky-nav-block hr { margin: 4px 0 !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# ── 타이틀 (스크롤 가능) ──────────────────────────────────────────────────────
+
+st.title("🍱 삼성중공업 식단")
+
+# ── 로그인 ───────────────────────────────────────────────────────────────────
+
+if "token" not in st.session_state:
+    with st.spinner("로그인 중..."):
+        try:
+            st.session_state.token = do_login()
+        except Exception as e:
+            st.error(f"로그인 실패: {e}")
+            st.stop()
+
+# ── 스티키 날짜/탭 네비게이션 ────────────────────────────────────────────────
+
+with st.container():
+    # 날짜 네비게이션
+    if "sel_date" not in st.session_state:
+        st.session_state.sel_date = korea_today()
+
+    meal_labels = [label for _, label in MEAL_TIMES]
+
+    today = korea_today()
+    sel = st.session_state.sel_date
+    diff = (sel - today).days
+    if diff == 0:
+        badge = " <span style='font-size:12px;color:#1a73e8;font-weight:700;'>(오늘)</span>"
+    elif diff == 1:
+        badge = " <span style='font-size:12px;color:#34a853;font-weight:700;'>(내일)</span>"
+    elif diff == -1:
+        badge = " <span style='font-size:12px;color:#9aa0a6;font-weight:700;'>(어제)</span>"
+    else:
+        badge = ""
+
+    col_today, col_prev, col_date, col_next = st.columns([1.5, 1, 4, 1])
+    with col_today:
+        if st.button("오늘", use_container_width=True, disabled=(diff == 0)):
+            st.session_state.sel_date = today
+            st.session_state.meal_radio = meal_labels[1]
+            st.rerun()
+    with col_prev:
+        if st.button("◀", use_container_width=True):
+            st.session_state.sel_date -= timedelta(days=1)
+            st.session_state.meal_radio = meal_labels[1]
+            st.rerun()
+    with col_date:
+        st.markdown(
+            f"<div style='text-align:center;font-size:15px;font-weight:600;"
+            f"padding:0 0 6px 0;white-space:nowrap;'>{date_label(sel)}{badge}</div>",
+            unsafe_allow_html=True,
+        )
+    with col_next:
+        if st.button("▶", use_container_width=True):
+            st.session_state.sel_date += timedelta(days=1)
+            st.session_state.meal_radio = meal_labels[1]
+            st.rerun()
+
+    date_str = date_to_str(sel)
+
+    st.divider()
+
+    # 아침/점심/저녁 탭
+    if "meal_radio" not in st.session_state:
+        st.session_state.meal_radio = meal_labels[1]
+
+    selected_label = st.radio(
+        "식사 시간",
+        options=meal_labels,
+        key="meal_radio",
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+    meal_id = next(mid for mid, lbl in MEAL_TIMES if lbl == selected_label)
+
+    # 스티키 헤더 끝 마커
+    st.markdown('<div id="header-end"></div>', unsafe_allow_html=True)
+
+# ── 메뉴 컨텐츠 ──────────────────────────────────────────────────────────────
+
+st.markdown("")
+
+token = st.session_state.token
+
+try:
+    dishes, token = get_dishes_with_relogin(token, date_str, meal_id)
+except Exception as e:
+    st.warning(f"메뉴를 불러오지 못했습니다: {e}")
+    dishes = []
+
+if not dishes:
+    st.info("해당 날짜에 메뉴가 없습니다.")
+else:
+    all_courses = group_into_courses(dishes)
+    takein = [g for g in all_courses if not is_takeout(g)]
+    takeout = [g for g in all_courses if is_takeout(g)]
+
+    for course in takein:
+        render_course(course, date_str, meal_id, token)
+
+    if takeout:
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.expander(f"🥡 포장 메뉴 ({len(takeout)}개)"):
+            for course in takeout:
+                name = main_dish_name(course)
+                label = course_label(course)
+                kcal = parse_kcal(course[0].get("sumKcal"))
+                dish_names = [d["menuName"] for d in course]
+                render_dish_table(label, name, dish_names)
+                if kcal:
+                    st.caption(f"🔥 {kcal} kcal")
+                st.markdown("<hr style='margin:8px 0'>", unsafe_allow_html=True)
+
+# ── 스티키 헤더 JS ────────────────────────────────────────────────────────────
+
+components.html("""
+<script>
+(function() {
+  var doc = window.parent.document;
+
+  function applySticky() {
+    var marker = doc.getElementById('header-end');
+    if (!marker) return false;
+
+    // 마커를 포함하는 가장 바깥쪽 stVerticalBlock 탐색
+    var blocks = Array.from(doc.querySelectorAll('[data-testid="stVerticalBlock"]'));
+    var outerBlock = null;
+    for (var i = 0; i < blocks.length; i++) {
+      if (blocks[i].contains(marker)) {
+        outerBlock = blocks[i];
+        break;
+      }
+    }
+    if (!outerBlock) return false;
+
+    // outerBlock의 직계 자식 중 마커를 포함하는 요소 (컨테이너 래퍼)
+    var target = marker;
+    while (target && target.parentElement !== outerBlock) {
+      target = target.parentElement;
+      if (!target || target === doc.body) return false;
+    }
+    if (!target) return false;
+
+    // 배경색 결정 (다크모드 대응)
+    var appEl = doc.querySelector('.stApp');
+    var bg = appEl ? getComputedStyle(appEl).backgroundColor : '';
+    if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
+      bg = getComputedStyle(doc.body).backgroundColor;
+    }
+    if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
+      bg = '#ffffff';
+    }
+
+    target.style.position = 'sticky';
+    target.style.top = '0';
+    target.style.zIndex = '999';
+    target.style.backgroundColor = bg;
+    target.style.paddingTop = '6px';
+    target.style.paddingBottom = '2px';
+    return true;
+  }
+
+  function tryApply(remaining) {
+    if (applySticky()) return;
+    if (remaining > 0) setTimeout(function() { tryApply(remaining - 1); }, 300);
+  }
+
+  tryApply(8);
+
+  // Streamlit 리렌더링 시 재적용
+  var debounce;
+  var mainEl = doc.querySelector('section[data-testid="stMain"]') || doc.body;
+  var observer = new MutationObserver(function() {
+    clearTimeout(debounce);
+    debounce = setTimeout(function() { applySticky(); }, 200);
+  });
+  observer.observe(mainEl, { childList: true, subtree: true, attributes: false, characterData: false });
+})();
+</script>
+""", height=0)
