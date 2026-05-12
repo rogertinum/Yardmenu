@@ -250,6 +250,9 @@ st.set_page_config(page_title="삼성중공업 식단", page_icon="🍱", layout
 
 st.markdown("""
 <style>
+/* primary-color 직접 지정 (config.toml [theme] 제거 후 대체) */
+:root { --primary-color: #1a73e8; }
+
 /* Streamlit CSS 변수 기반 동적 색상 (Settings 토글에 자동 반응) */
 :root {
     --wm-badge-bg:    color-mix(in srgb, var(--primary-color) 12%, var(--secondary-background-color));
