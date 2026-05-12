@@ -256,14 +256,15 @@ st.markdown("""
 div[data-testid="stRadio"] > div {
     display: flex;
     flex-wrap: nowrap;
+    justify-content: center;
     gap: 0;
     border-bottom: 2px solid #aaa;
     margin-bottom: 0;
 }
 div[data-testid="stRadio"] > div > label {
-    flex: 1;
+    flex: 0 0 auto;
     text-align: center;
-    padding: 6px 4px;
+    padding: 6px 20px;
     border-bottom: 3px solid transparent;
     cursor: pointer;
     font-size: 14px;
