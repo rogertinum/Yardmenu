@@ -250,30 +250,15 @@ st.set_page_config(page_title="삼성중공업 식단", page_icon="🍱", layout
 
 st.markdown("""
 <style>
-/* 라이트/다크 커스텀 변수 */
+/* Streamlit CSS 변수 기반 동적 색상 (Settings 토글에 자동 반응) */
 :root {
-    --wm-text:       #31333f;
-    --wm-text-sub:   rgba(49,51,63,0.75);
-    --wm-text-muted: rgba(49,51,63,0.45);
-    --wm-border:     #e8e8e8;
-    --wm-badge-bg:   #e8f4fd;
-    --wm-badge-color:#1a73e8;
-    --wm-footer:     rgba(49,51,63,0.4);
-}
-@media (prefers-color-scheme: dark) {
-    :root {
-        --wm-text:       #fafafa;
-        --wm-text-sub:   rgba(250,250,250,0.75);
-        --wm-text-muted: rgba(250,250,250,0.45);
-        --wm-border:     #2d2d3a;
-        --wm-badge-bg:   #0d2a4a;
-        --wm-badge-color:#5ba4f5;
-        --wm-footer:     rgba(250,250,250,0.35);
-    }
-    .stApp, [data-testid="stAppViewContainer"],
-    [data-testid="stHeader"], section[data-testid="stSidebar"] {
-        background-color: #0e1117 !important;
-    }
+    --wm-badge-bg:    color-mix(in srgb, var(--primary-color) 12%, var(--secondary-background-color));
+    --wm-badge-color: var(--primary-color);
+    --wm-text:        var(--text-color);
+    --wm-text-sub:    color-mix(in srgb, var(--text-color) 75%, transparent);
+    --wm-text-muted:  color-mix(in srgb, var(--text-color) 45%, transparent);
+    --wm-border:      var(--secondary-background-color);
+    --wm-footer:      color-mix(in srgb, var(--text-color) 40%, transparent);
 }
 
 /* Streamlit 상단 헤더(Deploy 바) 높이만큼 여백 */
