@@ -2,5 +2,4 @@
 headless = true
 
 [theme]
-base = "dark"
 primaryColor = "#1a73e8"
