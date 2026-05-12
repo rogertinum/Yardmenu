@@ -255,12 +255,15 @@ st.markdown("""
 /* 탭 스타일 라디오 */
 div[data-testid="stRadio"] > div {
     display: flex;
+    flex-wrap: nowrap;
     gap: 0;
     border-bottom: 2px solid #aaa;
     margin-bottom: 0;
 }
 div[data-testid="stRadio"] > div > label {
-    padding: 6px 22px;
+    flex: 1;
+    text-align: center;
+    padding: 6px 4px;
     border-bottom: 3px solid transparent;
     cursor: pointer;
     font-size: 14px;
@@ -269,6 +272,7 @@ div[data-testid="stRadio"] > div > label {
     margin-bottom: -2px;
     background: transparent;
     transition: opacity 0.15s;
+    white-space: nowrap;
 }
 div[data-testid="stRadio"] > div > label:has(input:checked) {
     border-bottom: 3px solid #1a73e8;
