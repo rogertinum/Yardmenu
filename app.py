@@ -39,7 +39,7 @@ def parse_kcal(val):
 
 # ── 방문자 카운터 ─────────────────────────────────────────────────────────────
 
-_COUNTER_NS = "yardbus-rogermostwanted"
+_COUNTER_NS = "yardmenu-rogermostwanted"
 
 
 def _hit_counter(key: str) -> int:
